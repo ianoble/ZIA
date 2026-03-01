@@ -70,17 +70,14 @@ export interface ZiaGameState extends BaseGameState {
 	sectors: Record<string, Sector>;
 	ships: Record<string, Ship>;
 	players: Record<string, ZiaPlayer>;
-	/** For movement phase: dice result + engine = movement points remaining. */
 	movementPointsRemaining: number;
-	/** Optional: breakdown for end-game screen (fame from trade, combat, etc.). */
 	endGameScoreBreakdown: Record<string, { label: string; vp: number }[]>;
 	missions: Record<string, Mission>;
-	/** Available mission ids (not yet completed). */
 	missionDeck: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Initial map: center hex + 6 neighbors
+// Initial map & helpers
 // ---------------------------------------------------------------------------
 
 const INITIAL_HEXES: { q: number; r: number; name: string; goodType: GoodType; buyPrice: number; sellPrice: number }[] = [
@@ -167,15 +164,13 @@ export const ZiaGame: Game<ZiaGameState> = {
 	moves: {
 		setPlayerColor: ({ G, ctx }: { G: ZiaGameState; ctx: Ctx }, color: PlayerColor) => {
 			if (!PLAYER_COLORS.includes(color)) return INVALID_MOVE;
-			const pid = ctx.playerID;
+			const pid = ctx.playerID ?? ctx.currentPlayer;
 			if (pid && G.players[pid]) {
 				G.players[pid].color = color;
 			}
 		},
-		pass: ({ ctx }: { G: ZiaGameState; ctx: Ctx }) => {
-			// No-op to advance turn when no other move is made.
-		},
-		rollMovement: ({ G, ctx }: { G: ZiaGameState; ctx: Ctx }, _?: unknown) => {
+		pass: () => {},
+		rollMovement: ({ G, ctx }: { G: ZiaGameState; ctx: Ctx }) => {
 			const pid = ctx.currentPlayer;
 			const ship = pid && G.ships[pid];
 			if (!ship) return INVALID_MOVE;
@@ -227,14 +222,12 @@ export const ZiaGame: Game<ZiaGameState> = {
 			if (!sector || sector.goodType !== goodType) return INVALID_MOVE;
 			const slot = ship.cargo.find((s) => s.goodType === goodType);
 			if (!slot || slot.quantity < quantity) return INVALID_MOVE;
-			const revenue = sector.sellPrice * quantity;
-			player.credits += revenue;
+			player.credits += sector.sellPrice * quantity;
 			slot.quantity -= quantity;
 			if (slot.quantity <= 0) {
 				const i = ship.cargo.indexOf(slot);
 				if (i !== -1) ship.cargo.splice(i, 1);
 			}
-			// Fame from profitable trade (1 fame per sale when selling at this sector)
 			player.fame += 1;
 		},
 		attack: ({ G, ctx }: { G: ZiaGameState; ctx: Ctx }, targetPlayerId: string) => {
@@ -359,12 +352,12 @@ export const gameDef = defineGame<ZiaGameState>({
 			return true;
 		}
 		if (moveName === 'buyGoods') {
-			const [sectorId, goodType, quantity] = args as [string, GoodType, number];
+			const [sectorId, _goodType, quantity] = args as [string, GoodType, number];
 			if (typeof sectorId !== 'string' || typeof quantity !== 'number' || quantity < 1) return 'Invalid args';
 			return true;
 		}
 		if (moveName === 'sellGoods') {
-			const [sectorId, goodType, quantity] = args as [string, GoodType, number];
+			const [sectorId, _goodType, quantity] = args as [string, GoodType, number];
 			if (typeof sectorId !== 'string' || typeof quantity !== 'number' || quantity < 1) return 'Invalid args';
 			return true;
 		}
